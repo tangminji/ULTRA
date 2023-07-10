@@ -26,7 +26,7 @@ parser.add_argument('--n_epoch', type=int, default=100)#100
 parser.add_argument('--optimizer', type=str, default='SGD')
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--print_freq', type=int, default=300)
-parser.add_argument('--model_type', type=str, help='[ce, ours, ours_cl]', default='ours_cl')
+parser.add_argument('--model_type', type=str, help='[ce, ours, ours_cl]', default='ours')
 parser.add_argument('--split_per', type=float, help='train and validation', default=0.9)
 parser.add_argument('--gpu', type=int, help='ind of gpu', default=0)
 parser.add_argument('--weight_decay', type=float, help='l2', default=5e-4)
@@ -52,7 +52,7 @@ parser.add_argument('--gamma', default=1.0, help="weight for contrastive loss", 
 parser.add_argument('--temp', type=float, default=0.1, help='temperature for loss function')#[0.1,0.5]
 #for correction
 parser.add_argument("--rollWindow", default=5, help="rolling window to calculate the confidence, make more stable, should be smaller than warm_up", type=int)
-parser.add_argument("--warm_up", default=10, help="warm-up period", type=int)#8
+parser.add_argument("--warm_up", default=0, help="warm-up period", type=int)#8
 parser.add_argument("--epsilon", default=0.3, help="for ID noise judgement, [0.3,0.9]", type=float)
 parser.add_argument("--eta", default=0.3, help="for OOD noise judgement", type=float)#0.3
 parser.add_argument("--delta", default=0.3, help="smoothing for one-hot vector, [0,0.5]", type=float)

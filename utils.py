@@ -248,7 +248,7 @@ def train_ce(args, model, loader, optimizer, epoch, scheduler, criterion):
     for data, target, index in tqdm(loader, unit='batch'):
 
         data, target = data.to(args.device), target.to(args.device)
-        output = model(data, filter=args.filter)
+        output, _ = model(data, filter=args.filter)
         loss = criterion(output, target)
 
         optimizer.zero_grad()
@@ -280,7 +280,7 @@ def evaluate(args, model, loader, epoch, criterion, test_best=0, mode='val'):
     with torch.no_grad():
         for data, target, index in tqdm(loader, unit='batch'):
             data, target = data.to(args.device), target.to(args.device)
-            output = model(data, filter=args.filter)
+            output, _ = model(data, filter=args.filter)
             test_loss.update(criterion(output, target).item(), data.size(0))
             acc1 = compute_topk_accuracy(output, target, topk=(1,))
             correct.update(acc1[0].item(), data.size(0))
