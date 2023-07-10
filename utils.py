@@ -154,7 +154,9 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
         optimizer.step()
 
         train_loss.update(loss.item(), data.size(0))
-        acc1 = compute_topk_accuracy(output[:,:-1], target.repeat(2), topk=(1,))
+        if args.model_type == 'ours_cl':
+            target = target.repeat(2)
+        acc1 = compute_topk_accuracy(output[:,:-1], target, topk=(1,))
         correct.update(acc1[0].item(), data.size(0))
 
     scheduler.step()

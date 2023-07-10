@@ -116,7 +116,7 @@ def main(args):
         criterion_train = criterion_train.cuda()
         criterion_val = criterion_val.cuda()
         criterion_test = criterion_test.cuda()
-        cudnn.beachmark = True
+        #cudnn.beachmark = True
 
     optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
     scheduler = MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
