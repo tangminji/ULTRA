@@ -67,8 +67,85 @@ class cifar10_svhn_dataset(Data.Dataset):
     def update_corrupted_label(self, noise_label):
         self.train_labels[:] = noise_label[:]
 
+class MiniImagenet_dataset(Data.Dataset):
+    def __init__(self, path, noise_rate='valid', transform=None, target_transform=None):
+            
+        self.transform = transform
+        self.target_transform = target_transform
+           
+        self.train_data = np.load('{}/data/cnwl/red_{}_images.npy'.format(path, noise_rate))
+        self.train_labels = np.load('{}/data/cnwl/red_{}_labels.npy'.format(path, noise_rate))
+        self.train_data = [Image.fromarray(image) for image in self.train_data]
+    
+    def __getitem__(self, index):
+        
+        img, label = self.train_data[index], self.train_labels[index]
+        
+        if self.transform is not None:
+            img = self.transform(img)
+            
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+     
+        return img, label, index
+    
+    def __len__(self):
+        return len(self.train_data)
+    
+    def update_corrupted_label(self, noise_label):
+        self.train_labels[:] = noise_label[:]
 # load dataset
 #def load_data(args):
+
+# Adapt from https://github.com/PaulAlbert31/PLS/blob/main/utils.py#L52
+def get_miniimagenet_dataset(args):
+    mean = [0.4728, 0.4487, 0.4031]
+    std = [0.2744, 0.2663 , 0.2806]
+    size = 32
+    
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(size, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+        
+    test_transform = transforms.Compose([
+        transforms.CenterCrop(size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)
+    ])
+    if args.model_type == 'ours_cl':
+        train_dataset = MiniImagenet_dataset(args.path, noise_rate=args.noise_rate2,
+                                             transform=TwoCropTransform(train_transform),
+                                             target_transform=transformer.transform_target,
+                                             )
+    else:
+        train_dataset = MiniImagenet_dataset(args.path, noise_rate=args.noise_rate2,
+                                              transform=train_transform,
+                                              target_transform=transformer.transform_target,
+                                              )
+    test_dataset = MiniImagenet_dataset(args.path, noise_rate='valid',
+        transform=test_transform,
+        target_transform=transformer.transform_target
+    )
+    val_dataset = test_dataset # follow PLS
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                               batch_size=args.batch_size,
+                                               drop_last=False,
+                                               shuffle=True)
+
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
+                                             batch_size=args.batch_size,
+                                             drop_last=False,
+                                             shuffle=False)
+
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                              batch_size=args.batch_size,
+                                              drop_last=False,
+                                              shuffle=False)
+    return train_loader, val_loader, test_loader
+
 def get_cifars_dataset(args):
 
     train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),

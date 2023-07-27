@@ -158,6 +158,14 @@ unused/
 
 # Output file
 results/
+results-test/
+hy/
+enum/
+nrun/
+
+*backup.py
+*test.py
+/*.json
 
 # data
 data/

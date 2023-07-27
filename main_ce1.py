@@ -1,103 +1,128 @@
 import os
 import torch
-from torch.optim.lr_scheduler import MultiStepLR
+from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 import torch.backends.cudnn as cudnn
 import argparse
 import numpy as np
 import time
 import PreResNet_rours
-from data import get_cifars_dataset
+from data import get_cifars_dataset, get_miniimagenet_dataset
 from utils import train_ce, train_ours, evaluate, set_seed, log, generate_log_dir, checkpoint, lrt_correction_pr
 from loss import CELoss, CE_OurLoss, OurLoss, Our_SupCL_loss
+import json
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--n', type=int, default=0, help="No.")
-parser.add_argument('--d', type=str, default='output', help="description")
-parser.add_argument('--p', type=int, default=0, help="print")
-parser.add_argument('--c', type=int, default=10, help="class")
-parser.add_argument('--lr', type=float, default=0.01)
-parser.add_argument('--result_dir', type=str, help='dir to save result txt files', default='results')
-#parser.add_argument('--noise_rate', type=float, help='overall corruption rate, should be less than 1', default=0.4)
-parser.add_argument('--noise_rate1', type=float, help='open corruption rate, should be less than 1', default=0.1)
-parser.add_argument('--noise_rate2', type=float, help='closed corruption rate, should be less than 1', default=0.1)
-parser.add_argument('--noise_type', type=str, help='[instance, pairflip, symmetric, asymmetric]', default='instance')
-parser.add_argument('--dataset', type=str, help='mnist, cifar10, cifar100, or imagenet_tiny', default='cifar10s')
-parser.add_argument('--n_epoch', type=int, default=100)#100
-parser.add_argument('--optimizer', type=str, default='SGD')
-parser.add_argument('--seed', type=int, default=1)
-parser.add_argument('--print_freq', type=int, default=300)
-parser.add_argument('--model_type', type=str, help='[ce, ours, ours_cl]', default='ours')
-parser.add_argument('--split_per', type=float, help='train and validation', default=0.9)
-parser.add_argument('--gpu', type=int, help='ind of gpu', default=0)
-parser.add_argument('--weight_decay', type=float, help='l2', default=5e-4)
-parser.add_argument('--momentum', type=int, help='momentum', default=0.9)
-parser.add_argument('--batch_size', type=int, help='batch_size', default=128)
+from hyperopt import STATUS_OK
 
-#TODO: newly added by wtt, hyperparameters:[warm_up, delta, epsilon, eta], the last one/two more important?
-parser.add_argument('--path', type=str, help='path prefix', default='/users6/ttwu/script/Unified_LNL/Extend_T')
-parser.add_argument('--restart', default=True, const=True, action='store_const',
-                    help='Erase log and saved checkpoints and restart training')#False
+def init_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n', type=int, default=0, help="No.")
+    parser.add_argument('--d', type=str, default='output', help="description")
+    parser.add_argument('--p', type=int, default=0, help="print")
+    parser.add_argument('--c', type=int, default=10, help="class")
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--result_dir', type=str, help='dir to save result txt files', default='results')
+    #parser.add_argument('--noise_rate', type=float, help='overall corruption rate, should be less than 1', default=0.4)
+    parser.add_argument('--noise_rate1', type=float, help='open corruption rate, should be less than 1', default=0.1)
+    parser.add_argument('--noise_rate2', type=float, help='closed corruption rate, should be less than 1', default=0.1)
+    parser.add_argument('--noise_type', type=str, help='[instance, pairflip, symmetric, asymmetric]', default='instance')
+    parser.add_argument('--dataset', type=str, help='mnist, cifar10, cifar100, cnwl, or imagenet_tiny', default='cifar10s')
+    parser.add_argument('--n_epoch', type=int, default=100)#100
+    parser.add_argument('--optimizer', type=str, default='SGD')
+    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--print_freq', type=int, default=300)
+    parser.add_argument('--model_type', type=str, help='[ce, ours, ours_cl]', default='ours')
+    parser.add_argument('--split_per', type=float, help='train and validation', default=0.9)
+    parser.add_argument('--gpu', type=int, help='ind of gpu', default=0)
+    parser.add_argument('--weight_decay', type=float, help='l2', default=5e-4)
+    parser.add_argument('--momentum', type=int, help='momentum', default=0.9)
+    parser.add_argument('--batch_size', type=int, help='batch_size', default=128)
 
-#for representation enhancement
-parser.add_argument('--lam', default=1.0, help="weight for representation enhancement", type=float)
-parser.add_argument('--f_type', type=str, default='enh', help='realize enh or enh_red with filter: [enh, enh_red]')
-parser.add_argument('--filter', type=str, default='dwt', help='Executing Filter or not: [dwt, dct, None]')
-parser.add_argument('--wvlname', type=str, default='haar', help='Which wavelet to use: [haar, dbN]')
-#for J's initialization, see line 171,172 in utils.py
-parser.add_argument('--J', type=int, default=9, help='Number of levels of decomposition')
-parser.add_argument('--data_len', type=int, default=512, help='Dimention of data before dwt')
-parser.add_argument('--mode', type=str, default='zero', help='Padding scheme: [zero, symmetric, reflect, periodization]')
-#for contrastive learning
-parser.add_argument('--gamma', default=1.0, help="weight for contrastive loss", type=float)
-parser.add_argument('--temp', type=float, default=0.1, help='temperature for loss function')#[0.1,0.5]
-#for correction
-parser.add_argument("--rollWindow", default=5, help="rolling window to calculate the confidence, make more stable, should be smaller than warm_up", type=int)
-parser.add_argument("--warm_up", default=0, help="warm-up period", type=int)#8
-parser.add_argument("--epsilon", default=0.3, help="for ID noise judgement, [0.3,0.9]", type=float)
-parser.add_argument("--eta", default=0.3, help="for OOD noise judgement", type=float)#0.3
-parser.add_argument("--delta", default=0.3, help="smoothing for one-hot vector, [0,0.5]", type=float)
-parser.add_argument("--inc", default=0.1, help="for increment of epsilon, delta", type=float)
+    #TODO: newly added by wtt, hyperparameters:[warm_up, delta, epsilon, eta], the last one/two more important?
+    parser.add_argument('--path', type=str, help='path prefix', default='./')
+    parser.add_argument('--restart', default=True, const=True, action='store_const',
+                        help='Erase log and saved checkpoints and restart training')#False
 
-args = parser.parse_args()
+    #for representation enhancement
+    parser.add_argument('--lam', default=1.0, help="weight for representation enhancement", type=float)
+    parser.add_argument('--f_type', type=str, default='enh', help='realize enh or enh_red with filter: [enh, enh_red]')
+    parser.add_argument('--filter', type=str, default='dwt', help='Executing Filter or not: [dwt, dct, None]')
+    parser.add_argument('--wvlname', type=str, default='haar', help='Which wavelet to use: [haar, dbN]')
+    #for J's initialization, see line 171,172 in utils.py
+    parser.add_argument('--J', type=int, default=9, help='Number of levels of decomposition')
+    parser.add_argument('--data_len', type=int, default=512, help='Dimention of data before dwt')
+    parser.add_argument('--mode', type=str, default='zero', help='Padding scheme: [zero, symmetric, reflect, periodization]')
+    #for contrastive learning
+    parser.add_argument('--gamma', default=1.0, help="weight for contrastive loss", type=float)
+    parser.add_argument('--temp', type=float, default=0.1, help='temperature for loss function')#[0.1,0.5]
+    #for correction
+    parser.add_argument("--rollWindow", default=5, help="rolling window to calculate the confidence, make more stable, should be smaller than warm_up", type=int)
+    parser.add_argument("--warm_up", default=30, help="warm-up period", type=int)
+    parser.add_argument("--epsilon", default=0.3, help="for ID noise judgement, [0.3,0.9]", type=float)
+    parser.add_argument("--eta", default=0.3, help="for OOD noise judgement", type=float)#0.3
+    parser.add_argument("--delta", default=0.3, help="smoothing for one-hot vector, [0,0.5]", type=float)
+    parser.add_argument("--inc", default=0.1, help="for increment of epsilon, delta", type=float)
 
-if args.model_type == 'ce':
-    if args.filter == 'None':
-        args.filter = None
-    assert args.filter == None, 'Filter should not be set~'
-elif args.model_type in ['ours', 'ours_cl']:
-    assert args.filter in ['dwt', 'dct'], 'Filter should be set~'
+    parser.add_argument('--params_path', type=str, default='') #params.json
+    parser.add_argument('--out_tmp', type=str, default='') #result.json
+    parser.add_argument('--nrun', action='store_true')
+    args = parser.parse_args()
+    return args
 
-exp_name = os.path.join(args.path,
-                        args.result_dir + '/' + args.dataset +
-                        '/{}_{}{}/'.format(args.model_type, args.noise_type,
-                       '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
-                                                                               args.J,
-                                                                            args.f_type,
-                                                                            args.lam,
-                                                                            args.warm_up,
-                                                                            args.delta,
-                                                                            args.epsilon,
-                                                                            args.eta,
-                                                                            args.inc,
-                                                                            '' if args.model_type == 'ours' else '_gam={}_temp={}'.format(args.gamma, args.temp)))
-                        + '{}_{}'.format(args.noise_rate1, args.noise_rate2))
-if not os.path.exists(exp_name):
-    os.makedirs(exp_name)
 
-args.logpath = '{}/log.txt'.format(exp_name)
-args.log_dir = os.path.join(os.getcwd(), exp_name)
-generate_log_dir(args)
-log(args.logpath, 'Settings: {}\n'.format(args))
+def update_args(params={}):
+    if args.model_type == 'ce':
+        if args.filter == 'None':
+            args.filter = None
+        assert args.filter == None, 'Filter should not be set~'
+    elif args.model_type in ['ours', 'ours_cl']:
+        assert args.filter in ['dwt', 'dct'], 'Filter should be set~'
 
-args.device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
-if torch.cuda.is_available() and args.gpu is not None:
-    torch.cuda.set_device(args.gpu)
-set_seed(args)
+    # update args according to params
+    for key in params:
+        if params[key] is not None:
+            setattr(args, key, params[key])
 
-def main(args):
+    noise_level = f"{args.noise_rate1}_{args.noise_rate2}"
+    if args.nrun:
+        args.result_dir = 'nrun'
+    exp_name = os.path.join(args.path,
+                            args.result_dir,
+                            args.dataset,
+                            noise_level,
+                            '{}_{}{}/'.format(args.model_type, args.noise_type,
+                        '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
+                                                                                args.J,
+                                                                                args.f_type,
+                                                                                args.lam,
+                                                                                args.warm_up,
+                                                                                args.delta,
+                                                                                args.epsilon,
+                                                                                args.eta,
+                                                                                args.inc,
+                                                                                '' if args.model_type == 'ours' else '_gam={}_temp={}'.format(args.gamma, args.temp))),
+                                                                                f"seed{args.seed}")
+                            # + '{}_{}'.format(args.noise_rate1, args.noise_rate2))
+    if not os.path.exists(exp_name):
+        os.makedirs(exp_name)
+    args.exp_name = exp_name
+    args.logpath = '{}/log.txt'.format(exp_name)
+    args.log_dir = os.path.join(os.getcwd(), exp_name)
+    generate_log_dir(args)
+    log(args.logpath, 'Settings: {}\n'.format(args))
+
+    args.device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available() and args.gpu is not None:
+        torch.cuda.set_device(args.gpu)
+    set_seed(args)
+    return args
+
+def main(args, params={}):
     # Data Loader (Input Pipeline)
     print('loading dataset...')
-    train_loader, val_loader, test_loader = get_cifars_dataset(args)
+    if args.dataset == 'cnwl':
+        train_loader, val_loader, test_loader = get_miniimagenet_dataset(args)
+    else:
+        train_loader, val_loader, test_loader = get_cifars_dataset(args)
 
     # Define models and criterion
     print('building model...')
@@ -119,7 +144,10 @@ def main(args):
         #cudnn.beachmark = True
 
     optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-    scheduler = MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
+    if args.dataset == 'cnwl':
+        scheduler = CosineAnnealingLR(optimizer, T_max=args.n_epoch)
+    else:
+        scheduler = MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
 
     # training
     global_t0 = time.time()
@@ -173,7 +201,18 @@ def main(args):
     log(args.logpath, '\nBest Acc: {}'.format(test_acc_max))
     log(args.logpath, '\nBest Acc_: {}'.format(test_acc_max_))
     log(args.logpath, '\nTotal Time: {:.1f}s.\n'.format(run_time))
-    return test_acc_max
+    
+    # TODO
+    record_file = os.path.join(args.path, "results/results.txt")
+    log(record_file, '{}:\n{}\n'.format(args.exp_name, test_acc_max_))
+
+    with open(os.path.join(args.log_dir, 'best_results.txt'), 'w') as outfile:
+        outfile.write('{}\t{}'.format(test_acc_max, test_acc_max_))
+
+    loss = -test_acc_max_
+    stable_acc = np.mean(test_acc_list[-5:])
+    return {'loss': loss, 'best_acc': test_acc_max_, 'test_at_best': test_acc_max, 'stable_acc': stable_acc,
+            'params': params, 'train_time': run_time, 'status': STATUS_OK}
 
 
 if __name__ == '__main__':
@@ -193,4 +232,17 @@ if __name__ == '__main__':
     # print(np.array(acclist).mean())
     # print(np.array(acclist).std(ddof=1))
 
-    main(args)
+    args = init_args()
+
+    print("load params from : ", args.params_path)
+    # TODO params_path等变量
+    params = json.load(open(args.params_path, 'r', encoding="utf-8")) if args.params_path !='' else {}
+    if 'best' in params:
+        params = params['best']
+        args.nrun = True
+    args = update_args(params)
+    res = main(args, params=params)
+    # TODO
+    if args.out_tmp:
+        res['ITERATION'] = params['ITERATION']
+        json.dump(res, open(args.out_tmp, "w+", encoding="utf-8"), ensure_ascii=False)
