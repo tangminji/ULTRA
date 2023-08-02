@@ -225,7 +225,7 @@ def lrt_correction_pr(args, epoch, y_tilde, prediction, delta_smooth):
 
     corrected_OOD_count = sum(high_uncertainty_mask)
     delta_smooth[high_uncertainty_mask] += args.inc
-    delta_smooth[high_uncertainty_mask] = torch.clamp(delta_smooth[high_uncertainty_mask], max=0.5)
+    delta_smooth[high_uncertainty_mask] = torch.clamp(delta_smooth[high_uncertainty_mask], max=1.0)
 
     print('Correct {} ID noise, {} OOD noise at {}-th epoch'.format(corrected_ID_count, corrected_OOD_count, epoch))
     if corrected_ID_count < 0.001*len(y_tilde):
