@@ -91,7 +91,7 @@ def update_args(params={}):
                             args.dataset,
                             noise_level,
                             '{}_{}{}{}/'.format(args.model_type, args.noise_type,
-                                                f'_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
+                                                f'_epoch{args.n_epoch}_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
                         '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
                                                                                 args.J,
                                                                                 args.f_type,
