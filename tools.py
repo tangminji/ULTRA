@@ -4,7 +4,7 @@ from scipy import stats
 import torch.nn.functional as F
 import torch
 
-def dataset_split_without_noise(train_images, train_labels, split_per=0.9, seed=1):
+def dataset_split_without_noise(train_images, train_labels, real_labels, split_per=0.9, seed=1):
     total_labels = train_labels[:, np.newaxis]
 
     num_samples = int(total_labels.shape[0])
@@ -15,8 +15,8 @@ def dataset_split_without_noise(train_images, train_labels, split_per=0.9, seed=
     print(train_images.shape)
     train_set, val_set = train_images[train_set_index], train_images[val_set_index]
     train_labels, val_labels = total_labels[train_set_index], total_labels[val_set_index]
-
-    return train_set, val_set, train_labels.squeeze(), val_labels.squeeze()
+    train_real_labels, val_real_labels = real_labels[train_set_index], real_labels[val_set_index]
+    return train_set, val_set, train_labels.squeeze(), val_labels.squeeze(), train_real_labels, val_real_labels
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''

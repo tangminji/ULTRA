@@ -21,14 +21,22 @@ class cifar10_svhn_dataset(Data.Dataset):
         dataset1, labels1 = np.load('{}/data/cifar10/train_images.npy'.format(path)), np.load('{}/data/cifar10/train_labels.npy'.format(path))
         dataset2, labels2 = np.load('{}/data/svhn/train_images.npy'.format(path)), np.load('{}/data/svhn/train_labels.npy'.format(path))
 
-        noisy_dataset1, noisy_labels1 = data_process.open_closed_noisy_labels(dataset1, labels1, dataset2, device,
+        noisy_dataset1, noisy_labels1, real_labels = data_process.open_closed_noisy_labels(dataset1, labels1, dataset2, device,
                                                                               closed_noise_type=noise_type,
                                                                               openset_noise_rate=noise_rate1,
                                                                               closed_set_noise_rate=noise_rate2,
                                                                               num_classes=10, random_seed=seed)
 
-        self.train_data, self.val_data, self.train_labels, self.val_labels = tools.dataset_split_without_noise(
-            noisy_dataset1, noisy_labels1, split_per, seed)
+        self.train_data, self.val_data, self.train_labels, self.val_labels, self.train_real_labels, self.val_real_labels = tools.dataset_split_without_noise(
+            noisy_dataset1, noisy_labels1, real_labels, split_per, seed)
+
+        save_path = f'{path}/data_meta/cifar10s/{noise_rate1}_{noise_rate2}/{seed}'
+        os.makedirs(save_path, exist_ok=True)
+        np.save(f"{save_path}/train_labels.npy",self.train_labels)
+        np.save(f"{save_path}/val_labels.npy",self.val_labels)
+        np.save(f"{save_path}/train_real_labels.npy",self.train_real_labels)
+        np.save(f"{save_path}/val_real_labels.npy",self.val_real_labels)
+        
 
         if self.train:      
             self.train_data = self.train_data.reshape((45000,3,32,32))

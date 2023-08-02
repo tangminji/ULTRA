@@ -8,6 +8,7 @@ def open_closed_noisy_labels(dataset1, dataset1_label, dataset2, device, closed_
     # not -> dataset1 and dataset2 do not have same classes, e.g., CIFAR-10 and SVHN (MNIST, *CIFAR-100)
 
     num_total_1, num_total_2 = int(dataset1.shape[0]), int(dataset2.shape[0])
+    real_label = np.copy(dataset1_label)
 
     noise_rate = float(openset_noise_rate + closed_set_noise_rate)
     num_noisy_labels_1 = int(noise_rate * num_total_1)
@@ -21,6 +22,7 @@ def open_closed_noisy_labels(dataset1, dataset1_label, dataset2, device, closed_
 
     # open_set_corruption (images corruption)
     dataset1[corrupted_open_noisy_labels_index_1] = dataset2[corrupted_labels_index_2]
+    real_label[corrupted_open_noisy_labels_index_1] = num_classes  # OOD
 
     # closed_set_corruption (labels corruption)
     labels = dataset1_label[corrupted_closed_noisy_labels_index_1]
@@ -33,7 +35,7 @@ def open_closed_noisy_labels(dataset1, dataset1_label, dataset2, device, closed_
         data_labels = zip(dataset, labels)
         noisy_labels = tools.get_instance_noisy_label(1.0, data_labels, labels, num_classes, feature_size, norm_std, device, random_seed)
         dataset1_label[corrupted_closed_noisy_labels_index_1] = noisy_labels.squeeze()
-    return dataset1, dataset1_label
+    return dataset1, dataset1_label, real_label
 
 
 

@@ -169,6 +169,7 @@ nrun/
 
 # data
 data/
+data_meta/
 model/
 
 # cache file
