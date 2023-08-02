@@ -160,6 +160,11 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
         correct.update(acc1[0].item(), data.size(0))
 
     scheduler.step()
+    log_value('train/lr', optimizer.param_groups[0]['lr'], step=epoch)
+    log_value('train_detail/delta_smooth/avg', delta_smooth.mean(), step=epoch)
+    log_value('train_detail/delta_smooth/std', delta_smooth.std(), step=epoch)
+    log_value('train_detail/net_record/avg', net_record.mean(), step=epoch)
+    log_value('train_detail/net_record/std', net_record.std(), step=epoch)
     # Print and log stats for the epoch
     log_value('train/loss', train_loss.avg, step=epoch)
     log(args.logpath, 'Time for Train-Epoch-{}/{}:{:.1f}s Acc:{}, Loss:{}\n'.format(epoch, args.n_epoch, time.time() - t0, correct.avg, train_loss.avg))

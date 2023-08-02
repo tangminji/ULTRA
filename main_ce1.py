@@ -65,6 +65,7 @@ def init_args():
     parser.add_argument('--params_path', type=str, default='') #params.json
     parser.add_argument('--out_tmp', type=str, default='') #result.json
     parser.add_argument('--nrun', action='store_true')
+    parser.add_argument('--record', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -89,7 +90,8 @@ def update_args(params={}):
                             args.result_dir,
                             args.dataset,
                             noise_level,
-                            '{}_{}{}/'.format(args.model_type, args.noise_type,
+                            '{}_{}{}{}/'.format(args.model_type, args.noise_type,
+                                                f'_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
                         '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
                                                                                 args.J,
                                                                                 args.f_type,
@@ -162,6 +164,11 @@ def main(args, params={}):
     net_record = torch.zeros([rollwin, len(train_loader.dataset), args.c+1])
     delta_smooth = torch.full((len(train_loader.dataset),), args.delta)
 
+    # TODO
+    # 记录net_record
+    if args.record:
+        records = torch.zeros([args.n_epoch, len(train_loader.dataset), args.c+1])
+
     for epoch in range(0, args.n_epoch):
         if args.model_type == 'ce':
             train_loss, train_acc = train_ce(args, net, train_loader, optimizer, epoch, scheduler, criterion_train)
@@ -177,7 +184,9 @@ def main(args, params={}):
                 train_loader.dataset.update_corrupted_label(y_cor.cpu().numpy())
         else:
             assert False, "Check model type, which should be in [ce, ours, ours_cl]~"
-
+        
+        if args.record:
+            records[epoch] = net_record[epoch % args.rollWindow]
         # validation
         val_best, val_loss, val_acc = evaluate(args, net, val_loader, epoch, criterion_val, val_best)
         # evaluate models
@@ -187,6 +196,8 @@ def main(args, params={}):
         val_acc_list.append(val_acc)
         test_acc_list.append(test_acc)
 
+    if args.record:
+        torch.save(records, os.path.join(args.log_dir, "record.pt"))
     # save model at the last epoch
     checkpoint(val_acc, epoch, net, args.log_dir, last=True)
     run_time = time.time() - global_t0
@@ -244,5 +255,6 @@ if __name__ == '__main__':
     res = main(args, params=params)
     # TODO
     if args.out_tmp:
-        res['ITERATION'] = params['ITERATION']
+        if 'ITERATION' in params:
+            res['ITERATION'] = params['ITERATION']
         json.dump(res, open(args.out_tmp, "w+", encoding="utf-8"), ensure_ascii=False)
