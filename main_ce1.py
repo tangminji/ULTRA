@@ -252,6 +252,8 @@ if __name__ == '__main__':
         params = params['best']
         args.nrun = True
     args = update_args(params)
+    # TODO
+    args.record = True
     res = main(args, params=params)
     # TODO
     if args.out_tmp:

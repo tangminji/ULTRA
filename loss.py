@@ -132,7 +132,7 @@ class Our_SupCL_loss(nn.Module):
         # Linear
         # gamma_schedule = torch.linspace(0, 1, args.warm_up)
         # Exponent
-        gamma_schedule[:args.warm_up] = torch.logspace(-args.warm_up, 0, args.warmup, np.e)
+        gamma_schedule[:args.warm_up] = torch.logspace(-args.warm_up, 0, args.warm_up, np.e)
         self.gamma = gamma_schedule * args.gamma
         self.eta = args.eta
         self.warmup = args.warm_up

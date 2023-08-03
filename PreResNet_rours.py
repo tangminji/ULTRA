@@ -179,9 +179,10 @@ class ResNet(nn.Module):
             elif filter == 'dct':
                 out += self.filter_DCT(out)
 
+            logits = self.linear(out)
+            # Feature for CL
             if self.norm:
                 out = F.normalize(out, dim=1)
-            logits = self.linear(out)
 
         return logits, out
 
