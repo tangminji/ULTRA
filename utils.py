@@ -153,11 +153,11 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
         loss.backward()
         optimizer.step()
 
-        train_loss.update(loss.item(), data.size(0))
+        train_loss.update(loss.item(), index.size(0))
         if args.model_type == 'ours_cl':
             target = target.repeat(2)
         acc1 = compute_topk_accuracy(output[:,:-1], target, topk=(1,))
-        correct.update(acc1[0].item(), data.size(0))
+        correct.update(acc1[0].item(), index.size(0))
 
     scheduler.step()
     log_value('train/lr', optimizer.param_groups[0]['lr'], step=epoch)
@@ -254,19 +254,23 @@ def train_ce(args, model, loader, optimizer, epoch, scheduler, criterion):
 
     for data, target, index in tqdm(loader, unit='batch'):
 
-        data, target = data.to(args.device), target.to(args.device)
-        output, _ = model(data, filter=args.filter)
+        if args.dataset == 'wiki':
+            data, target = {k: v.to(args.device) for k, v in data.items()}, target.to(args.device)
+            output = model(**data)['logits']
+        else:
+            data, target = data.to(args.device), target.to(args.device)
+            output, _ = model(data, filter=args.filter)
         loss = criterion(output, target)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        train_loss.update(loss.item(), data.size(0))
+        train_loss.update(loss.item(), index.size(0))
         if len(target.size()) == 2:  # soft target
             target = target.argmax(dim=1, keepdim=True)
         acc1 = compute_topk_accuracy(output, target, topk=(1,))
-        correct.update(acc1[0].item(), data.size(0))
+        correct.update(acc1[0].item(), index.size(0))
 
     scheduler.step()
     log_value('train/lr', optimizer.param_groups[0]['lr'], step=epoch)
@@ -278,6 +282,8 @@ def train_ce(args, model, loader, optimizer, epoch, scheduler, criterion):
     log_value('train/accuracy', correct.avg, step=epoch)
     return train_loss.avg, correct.avg
 
+# TODO
+CE = torch.nn.CrossEntropyLoss()
 # testing
 def evaluate(args, model, loader, epoch, criterion, test_best=0, mode='val'):
     model.eval()
@@ -286,11 +292,29 @@ def evaluate(args, model, loader, epoch, criterion, test_best=0, mode='val'):
     t0 = time.time()
     with torch.no_grad():
         for data, target, index in tqdm(loader, unit='batch'):
-            data, target = data.to(args.device), target.to(args.device)
-            output, _ = model(data, filter=args.filter)
-            test_loss.update(criterion(output, target).item(), data.size(0))
+            #TODO
+            assert  (0 <= target).all()
+            assert  (target < args.c).all()
+            if args.dataset == 'wiki':
+                data, target = {k: v.to(args.device) for k, v in data.items()}, target.to(args.device)
+                output = model(**data)['logits']
+            else:
+                data, target = data.to(args.device), target.to(args.device)
+                output, _ = model(data, filter=args.filter)
+            loss = criterion(output, target)
+            if torch.isnan(loss):
+                print('loss Nan', loss)
+                loss_std = CE(output, target)
+                print('CrossEntropyLoss', loss_std)
+                print('index', index)
+                print('target', target, flush=True)
+                torch.save(index, os.path.join(args.log_dir, "err_index.pt"))
+                checkpoint(correct.avg, epoch, model, args.log_dir, last=False)
+                assert False, "Show Nan Loss"
+
+            test_loss.update(loss.item(), index.size(0))
             acc1 = compute_topk_accuracy(output, target, topk=(1,))
-            correct.update(acc1[0].item(), data.size(0))
+            correct.update(acc1[0].item(), index.size(0))
 
     log(args.logpath, 'Time for {}-Epoch-{}/{}:{:.1f}s Acc:{}, Loss:{}\n'.format('Val' if mode == 'val' else 'Test',
                                                                             epoch, args.n_epoch, time.time() - t0,

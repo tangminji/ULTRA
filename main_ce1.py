@@ -13,6 +13,9 @@ import json
 
 from hyperopt import STATUS_OK
 
+# TODO RunTimeError on nan
+# torch.autograd.set_detect_anomaly(True)
+
 def init_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, default=0, help="No.")
@@ -66,6 +69,7 @@ def init_args():
     parser.add_argument('--out_tmp', type=str, default='') #result.json
     parser.add_argument('--nrun', action='store_true')
     parser.add_argument('--record', action='store_true')
+    parser.add_argument('--suffix', default='', type=str, help="suffix action")
     args = parser.parse_args()
     return args
 
@@ -90,7 +94,9 @@ def update_args(params={}):
                             args.result_dir,
                             args.dataset,
                             noise_level,
-                            '{}_{}{}{}/'.format(args.model_type, args.noise_type,
+                            args.suffix,
+                            "{}".format(args.model_type),
+                            '{}{}{}/'.format(args.noise_type,
                                                 f'_epoch{args.n_epoch}_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
                         '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
                                                                                 args.J,
