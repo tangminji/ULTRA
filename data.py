@@ -83,6 +83,8 @@ class MiniImagenet_dataset(Data.Dataset):
            
         self.train_data = np.load('{}/data/cnwl/red_{}_images.npy'.format(path, noise_rate))
         self.train_labels = np.load('{}/data/cnwl/red_{}_labels.npy'.format(path, noise_rate))
+        if noise_rate!='valid':
+            self.train_real_labels = np.load('{}/data/cnwl/red_{}_real.npy'.format(path, noise_rate))
         self.train_data = [Image.fromarray(image) for image in self.train_data]
     
     def __getitem__(self, index):
