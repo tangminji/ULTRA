@@ -162,6 +162,8 @@ results-test/
 hy/
 enum/
 nrun/
+compare/
+compare-val/
 
 *backup.py
 *test.py
