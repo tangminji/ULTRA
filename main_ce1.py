@@ -1,12 +1,13 @@
 import os
 import torch
-from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR, LambdaLR
 import torch.backends.cudnn as cudnn
 import argparse
 import numpy as np
 import time
 import PreResNet_rours
-from data import get_cifars_dataset, get_miniimagenet_dataset
+from data import get_cifars_dataset, get_miniimagenet_dataset, get_Clothing1M_train_and_val_loader
+from wiki_dataset import get_wiki_train_and_val_loader, get_wiki_model
 from utils import train_ce, train_ours, evaluate, set_seed, log, generate_log_dir, checkpoint, lrt_correction_pr
 from loss import CELoss, CE_OurLoss, OurLoss, Our_SupCL_loss
 import json
@@ -53,10 +54,12 @@ def init_args():
     #for J's initialization, see line 171,172 in utils.py
     parser.add_argument('--J', type=int, default=9, help='Number of levels of decomposition')
     parser.add_argument('--data_len', type=int, default=512, help='Dimention of data before dwt')
+    # J=11, data_len=2048 for clothing1m
     parser.add_argument('--mode', type=str, default='zero', help='Padding scheme: [zero, symmetric, reflect, periodization]')
     #for contrastive learning
     parser.add_argument('--gamma', default=1.0, help="weight for contrastive loss", type=float)
     parser.add_argument('--temp', type=float, default=0.1, help='temperature for loss function')#[0.1,0.5]
+    parser.add_argument('--aug_views', type=int, default=3, help='number of views for feature augmentations')#2
     #for correction
     parser.add_argument("--rollWindow", default=5, help="rolling window to calculate the confidence, make more stable, should be smaller than warm_up", type=int)
     parser.add_argument("--warm_up", default=30, help="warm-up period", type=int)
@@ -70,7 +73,20 @@ def init_args():
     parser.add_argument('--nrun', action='store_true')
     parser.add_argument('--record', action='store_true')
     parser.add_argument('--suffix', default='', type=str, help="suffix action")
+    # TODO clothing1m
+    parser.add_argument('--num_per_class', default=18976, type=int)
     args = parser.parse_args()
+
+    if args.dataset == 'clothing1m':
+        # TODO batch_size=256, however the resources may be used up
+        parser.set_defaults(c=14, batch_size=64, n_epoch=40, lr=0.01, J=11, data_len=2048, num_per_class=18976)
+        args = parser.parse_args()
+    elif args.dataset == 'wiki':
+        # Train Setting
+        parser.set_defaults(noise_mode='mix', data_path='/home/mjtang/wtt/NoisywikiHow/data/wikihow', c=158, batch_size=32, n_epoch=10, lr=3e-5, data_len=768, J=9)
+        args = parser.parse_args()
+        args.noise_rate = args.noise_rate2
+
     return args
 
 
@@ -95,7 +111,7 @@ def update_args(params={}):
                             args.dataset,
                             noise_level,
                             args.suffix,
-                            "{}".format(args.model_type),
+                            "{}".format(args.model_type) + (f"-{args.aug_views}" if args.model_type=='ours_cl' else ''),
                             '{}{}{}/'.format(args.noise_type,
                                                 f'_epoch{args.n_epoch}_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
                         '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
@@ -124,25 +140,40 @@ def update_args(params={}):
     set_seed(args)
     return args
 
+def get_criterion_and_model(args):
+    print('building model...')
+    if args.model_type == 'ce':
+        criterion_train, criterion_val, criterion_test = CELoss(args.c, args.device), CELoss(args.c, args.device), CELoss(args.c, args.device)
+    elif args.model_type == 'ours':
+        criterion_train, criterion_val, criterion_test = OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device)
+    else:
+        criterion_train, criterion_val, criterion_test = Our_SupCL_loss(args), CE_OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device)
+    num_class = args.c if args.model_type=='ce' else args.c+1
+    if args.dataset in ['cifar10s','cnwl']:
+        net = PreResNet_rours.ResNet18(args, num_class)
+    elif args.dataset in ['clothing1m']:
+        net = PreResNet_rours.ResNet50(args, num_class)
+    else:
+        net = get_wiki_model(args, num_class)
+    
+    return net, criterion_train, criterion_val, criterion_test
+
 def main(args, params={}):
     # Data Loader (Input Pipeline)
     print('loading dataset...')
     if args.dataset == 'cnwl':
         train_loader, val_loader, test_loader = get_miniimagenet_dataset(args)
+    elif args.dataset == 'wiki':
+        train_loader, val_loader, test_loader, noisy_ind, clean_ind = get_wiki_train_and_val_loader(args)
+        args.noisy_ind = noisy_ind
+        args.clean_ind = clean_ind
+    elif args.dataset == 'clothing1m':
+        train_loader, val_loader, test_loader = get_Clothing1M_train_and_val_loader(args)
     else:
         train_loader, val_loader, test_loader = get_cifars_dataset(args)
 
     # Define models and criterion
-    print('building model...')
-    if args.model_type == 'ce':
-        criterion_train, criterion_val, criterion_test = CELoss(args.c, args.device), CELoss(args.c, args.device), CELoss(args.c, args.device)
-        net = PreResNet_rours.ResNet18(args, args.c)
-    elif args.model_type == 'ours':
-        criterion_train, criterion_val, criterion_test = OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device)
-        net = PreResNet_rours.ResNet18(args, args.c+1)
-    else:
-        criterion_train, criterion_val, criterion_test = Our_SupCL_loss(args), CE_OurLoss(args.c, args.device), CE_OurLoss(args.c, args.device)
-        net = PreResNet_rours.ResNet18(args, args.c + 1)
+    net, criterion_train, criterion_val, criterion_test = get_criterion_and_model(args)
 
     if torch.cuda.is_available():
         net.cuda()
@@ -151,11 +182,16 @@ def main(args, params={}):
         criterion_test = criterion_test.cuda()
         #cudnn.beachmark = True
 
-    optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-    if args.dataset == 'cnwl':
-        scheduler = CosineAnnealingLR(optimizer, T_max=args.n_epoch)
+    if args.dataset == 'wiki' and args.suffix != 'sgd':
+        optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr)
     else:
+        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    scheduler = LambdaLR(optimizer, lambda epoch: 1.0) # Nothing to do with lr
+    if args.dataset in ['cnwl', 'clothing1m']:
+        scheduler = CosineAnnealingLR(optimizer, T_max=args.n_epoch)
+    elif args.dataset in ['cifar10s']:
         scheduler = MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
+    
 
     # training
     global_t0 = time.time()
@@ -166,7 +202,7 @@ def main(args, params={}):
     val_acc_list = []
     test_acc_list = []
 
-    rollwin = args.rollWindow if args.model_type != 'ours_cl' else args.rollWindow*2
+    rollwin = args.rollWindow if args.model_type != 'ours_cl' else args.rollWindow*args.aug_views#2
     net_record = torch.zeros([rollwin, len(train_loader.dataset), args.c+1])
     delta_smooth = torch.full((len(train_loader.dataset),), args.delta)
 

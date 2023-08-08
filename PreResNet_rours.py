@@ -252,8 +252,127 @@ def ResNet101(args, num_classes=10):
 def ResNet152(args, num_classes=10):
     return ResNet(args, Bottleneck, [3,8,36,3], num_classes=num_classes)
 
+import torchvision
+from torchvision.models import resnet50
 
+class ULTRA(nn.Module):
+    def __init__(self, args):
+        super(ULTRA, self).__init__()
+        if args.model_type in ['ours','ours_cl']:
+            self.fil_lst = self.fiter_lst_para(args.data_len, args.J, args.wvlname, args.mode)
+            self.dwt1D = DWT1D(J=args.J, wave=args.wvlname, mode=args.mode)
+            self.idwt1D = IDWT1D(wave=args.wvlname, mode=args.mode)
+            self.wave = args.wvlname
+            self.fea_dim = args.data_len
+            self.lam = args.lam
+            self.f_type = args.f_type
+    def forward(self, out, filter=None):
+        if filter != None:
+                # TODO: to determine args.J. For CIFAR10s, out.shape=[batch_size, data_len], we pick 1D calculation
+                # J = pywt.dwt_max_level(self.fea_dim, pywt.Wavelet(self.wave).dec_len)#for 1D
+                # print('J', J)
+                # J = pywt.dwtn_max_level(out.shape, self.wave, axes=[-2, -1])#for 2D
+                pass
+        if filter == 'dwt':
+            out += self.lam * self.filter_DWT(out, self.f_type)
+        elif filter == 'dct':
+            out += self.filter_DCT(out)
+        return out
+    def filter_DWT(self, embeddings, f_type):
+        #TODO: to determine args.J
+        #J = pywt.dwtn_max_level(embeddings.shape, self.wave)
+        yl, yh = self.dwt1D(embeddings[:,None,:])
+        assert len(yh)+1 == len(self.fil_lst)
+
+        yl_fil = F.adaptive_avg_pool1d(self.fil_lst[0][None, None], int(yl.shape[-1]))
+        if f_type == 'enh':
+            yl = yl * torch.sigmoid(yl_fil)
+        elif f_type == 'enh_red':
+            yl = yl * torch.tanh(yl_fil)
+        for i in range(len(yh)):
+            yh_fil = F.adaptive_avg_pool1d(self.fil_lst[i+1][None, None], int(yh[i].shape[-1]))
+            if f_type == 'enh':
+                yh[i] = yh[i] * torch.sigmoid(yh_fil)
+            elif f_type == 'enh_red':
+                yh[i] = yh[i] * torch.tanh(yh_fil)
+        emb_filtered = self.idwt1D((yl, yh))
+        return emb_filtered.squeeze()
+
+    def fiter_lst_para(self, data_len, J, wvlname, mode='zero'):
+        #data_len=224,J=[5,8],wvlname=['coif1','db8']
+        fil_lst = []
+        dec_len = pywt.Wavelet(wvlname).dec_len
+        coeff_len = data_len
+        for i in range(J):
+            coeff_len = pywt.dwt_coeff_len(coeff_len, dec_len, mode)
+            fil_lst.append(nn.Parameter(torch.ones(coeff_len)))
+        # reorganization dimensions to match yl,yh
+        fil_lst.insert(0, nn.Parameter(torch.ones(coeff_len)))
+        return nn.ParameterList(fil_lst)
+
+    def filter_DCT(self, embeddings):
+        '''
+        TODO: newly added
+        :param embeddings:
+        :return:
+        '''
+        seq_frequencies = dct.dct_2d(embeddings)
+        # batch_size, num_channels, output_size[0], output_size[1]
+        frq_filter = F.adaptive_avg_pool2d(self._frq_filter[None, None], int(embeddings.shape[-1]))
+        # normalize filter values to [0, 1] for learnable filter
+        frq_filter = torch.sigmoid(frq_filter)
+        # element-wise multiplication of filter with each row (no expansion needed due to prior pooling)
+        seq_filtered = seq_frequencies * frq_filter
+        # perform inverse DCT
+        emb_filtered = dct.idct_2d(seq_filtered)
+
+        return emb_filtered
+    
+class CustomResNet(nn.Module):
+    def __init__(self, resnet, num_classes, func, norm=False):
+        super(CustomResNet, self).__init__()
+        self.features = nn.Sequential(*list(resnet.children())[:-1])  # 保留 ResNet50 的卷积层部分
+        self.func = func # 变换函数
+        self.classifier = nn.Linear(resnet.fc.in_features, num_classes) # 将分类器修改为 14 分类
+        self.norm = norm
+    def forward(self, x, filter=None):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        print(x.shape)
+        x = self.func(x, filter) # 执行变换操作
+        logits = self.classifier(x)
+        # Feature for CL
+        if self.norm:
+            x = F.normalize(x, dim=1)
+        return logits, x
+
+def ResNet50(args, num_classes=10):
+    resnet = resnet50(pretrained=True)
+    norm = True if args.model_type == 'ours_cl' else False
+    func = ULTRA(args)
+    net = CustomResNet(resnet, num_classes, func,norm = norm)
+    return net
 # def test():
 #     net = ResNet18()
 #     y = net(Variable(torch.randn(1,3,32,32)))
 #     print(y.size())
+if __name__ == '__main__':
+    from main_ce1 import init_args
+    args = init_args()
+    x = torch.randn((2, 3, 224, 224))
+    net = ResNet50(args, num_classes=14)
+    y, fea = net(x, filter=args.filter)
+    print(y.shape)
+    print(fea.shape)
+
+    from data import get_Clothing1M_train_and_val_loader
+    train_loader, val_loader, test_loader = get_Clothing1M_train_and_val_loader(args)
+    for data, target, index in train_loader:
+        y, fea = net(data, filter=args.filter)
+        break
+    print(y.shape)
+    print(fea.shape)
+    # net = ResNet18(args)
+    # y, fea = net(Variable(torch.randn(1,3,32,32)))
+    # print(y.shape)
+    # print(fea.shape)

@@ -25,6 +25,7 @@ class Our_SupCL_loss(nn.Module):
         self.gamma = gamma_schedule * args.gamma
         self.eta = args.eta
         self.warmup = args.warm_up
+        self.aug_views = args.aug_views
 
     def forward(self, features, logits, labels, index, delta_smooth, epoch):
         """Compute loss for model. If both `labels` and `mask` are None,
@@ -43,10 +44,10 @@ class Our_SupCL_loss(nn.Module):
         delta_smooth = delta_smooth.to(self.device)
         logits_norm = F.softmax(logits, dim=1)
         if len(labels.size()) == 1:
-            db_labels = labels.repeat(2)
+            db_labels = labels.repeat(self.aug_views)
             target_oh = torch.zeros(db_labels.size(0), self.c + 1).to(self.device).scatter_(1, db_labels.view(-1, 1), (
-                        1 - delta_smooth[index].repeat(2)).view(-1, 1))  # convert label to one-hot
-            target_oh[:, -1] = delta_smooth[index].repeat(2)
+                        1 - delta_smooth[index].repeat(self.aug_views)).view(-1, 1))  # convert label to one-hot
+            target_oh[:, -1] = delta_smooth[index].repeat(self.aug_views)
         # calculate as cross-entropy loss
         loss_cla = -torch.mean(torch.sum(torch.log_softmax(logits, dim=1) * target_oh, dim=1))
         # loss_cla = -torch.mean(torch.sum(torch.log(logits_norm) * target_oh, dim=1))
@@ -132,7 +133,7 @@ class CELoss(nn.Module):
         if len(targets.size())==1:
             target_oh = torch.zeros(targets.size(0), self.c).to(self.device).scatter_(1, targets.view(-1,1), 1) # convert label to one-hot
 
-        loss = -torch.mean(torch.sum(torch.log_softmax(logits) * target_oh, dim=1))
+        loss = -torch.mean(torch.sum(torch.log_softmax(logits, dim=1) * target_oh, dim=1))
         return loss
 
 class CE_OurLoss(nn.Module):

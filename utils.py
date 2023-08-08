@@ -21,6 +21,15 @@ class TwoCropTransform:
     def __call__(self, x):
         return [self.transform(x), self.transform(x)]
 
+class ThreeCropTransform:
+    """Create three crops of the same image"""
+    def __init__(self, w_transform, s_tranform):
+        self.w_transform = w_transform
+        self.s_transform = s_tranform
+
+    def __call__(self, x):
+        return [self.w_transform(x), self.w_transform(x), self.s_transform(x)]
+
 class AverageMeter(object):
     """Computes and stores the average and current value."""
     def __init__(self, name, fmt=':f'):
@@ -127,6 +136,64 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
     t0 = time.time()
 
     for data, target, index in tqdm(loader, unit='batch'):
+        if args.dataset == 'wiki':
+            data, target = {k: v.to(args.device) for k, v in data.items()}, target.to(args.device)
+            output = model(**data)['logits']
+        else:
+            # wiki don't do ours_cl
+            if args.model_type == 'ours_cl':
+                data = torch.cat([data[0], data[1], data[2]], dim=0)
+            data, target = data.to(args.device), target.to(args.device)
+            output, fea = model(data, filter=args.filter)
+
+        if args.model_type == 'ours':
+            loss = criterion(output, target, index, delta_smooth)
+            # for correction
+            net_record[epoch % args.rollWindow, index] = F.softmax(output.detach().cpu(), dim=1)
+
+        elif args.model_type == 'ours_cl':
+            bsz = target.shape[0]
+            f1, f2, f3 = torch.split(fea, [bsz, bsz, bsz], dim=0)
+            features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1), f3.unsqueeze(1)], dim=1)
+            loss = criterion(features, output, target, index, delta_smooth, epoch)
+            # for correction
+            out1, out2, out3 = torch.split(output, [bsz, bsz, bsz], dim=0)
+            net_record[epoch % args.rollWindow, index] = F.softmax(out1.detach().cpu(), dim=1)
+            net_record[args.rollWindow + epoch % args.rollWindow, index] = F.softmax(out2.detach().cpu(), dim=1)
+            net_record[args.rollWindow*(args.aug_views-1) + epoch % args.rollWindow, index] = F.softmax(out3.detach().cpu(), dim=1)
+
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        train_loss.update(loss.item(), index.size(0))
+        if args.model_type == 'ours_cl':
+            target = target.repeat(args.aug_views)
+        acc1 = compute_topk_accuracy(output[:,:-1], target, topk=(1,))
+        correct.update(acc1[0].item(), index.size(0))
+
+    scheduler.step()
+    log_value('train/lr', optimizer.param_groups[0]['lr'], step=epoch)
+    log_value('train_detail/delta_smooth/avg', delta_smooth.mean(), step=epoch)
+    log_value('train_detail/delta_smooth/std', delta_smooth.std(), step=epoch)
+    log_value('train_detail/net_record/avg', net_record.mean(), step=epoch)
+    log_value('train_detail/net_record/std', net_record.std(), step=epoch)
+    if args.model_type == 'ours_cl':
+        log_value('train_detail/gamma', criterion.gamma[epoch], step=epoch)
+    # Print and log stats for the epoch
+    log_value('train/loss', train_loss.avg, step=epoch)
+    log(args.logpath, 'Time for Train-Epoch-{}/{}:{:.1f}s Acc:{}, Loss:{}\n'.format(epoch, args.n_epoch, time.time() - t0, correct.avg, train_loss.avg))
+    log_value('train/accuracy', correct.avg, step=epoch)
+    return train_loss.avg, correct.avg
+
+def train_ours_old(args, model, loader, optimizer, epoch, scheduler, criterion, net_record, delta_smooth):
+    model.train()
+    train_loss = AverageMeter('Loss', ':.4e')
+    correct = AverageMeter('Acc@1', ':6.2f')#for classification
+    t0 = time.time()
+
+    for data, target, index in tqdm(loader, unit='batch'):
         if args.model_type == 'ours_cl':
             data = torch.cat([data[0], data[1]], dim=0)
 
@@ -172,7 +239,6 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
     log(args.logpath, 'Time for Train-Epoch-{}/{}:{:.1f}s Acc:{}, Loss:{}\n'.format(epoch, args.n_epoch, time.time() - t0, correct.avg, train_loss.avg))
     log_value('train/accuracy', correct.avg, step=epoch)
     return train_loss.avg, correct.avg
-
 
 def lrt_correction_sr(args, y_gt, prediction):
     '''

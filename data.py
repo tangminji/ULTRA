@@ -2,13 +2,15 @@ import os
 
 import numpy as np
 import torch.utils.data as Data
+import PIL
 from PIL import Image
 import tools
 import torch
 import data_process
 import torchvision.transforms as transforms
+from torchvision.datasets import VisionDataset
 import transformer
-from utils import TwoCropTransform
+from utils import TwoCropTransform, ThreeCropTransform
 
 class cifar10_svhn_dataset(Data.Dataset):
     def __init__(self, path, device, seed, train=True, transform=None, target_transform=None, noise_type='symmetric', noise_rate1=0.2,
@@ -104,9 +106,8 @@ class MiniImagenet_dataset(Data.Dataset):
     
     def update_corrupted_label(self, noise_label):
         self.train_labels[:] = noise_label[:]
-# load dataset
-#def load_data(args):
 
+# Old
 # Adapt from https://github.com/PaulAlbert31/PLS/blob/main/utils.py#L52
 def get_miniimagenet_dataset(args):
     mean = [0.4728, 0.4487, 0.4031]
@@ -216,10 +217,199 @@ def get_cifars_dataset(args):
 
     return train_loader, val_loader, test_loader
 
+def get_miniimagenet_dataset(args):
+    mean = [0.4728, 0.4487, 0.4031]
+    std = [0.2744, 0.2663 , 0.2806]
+    size = 32
+    
+    train_wtransform = transforms.Compose([
+        # transforms.Resize(size, interpolation=PIL.Image.BICUBIC),
+        transforms.RandomCrop(size, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+
+    train_stransform = transforms.Compose([
+        # transforms.Resize(size, interpolation=PIL.Image.BICUBIC),
+        transforms.RandomResizedCrop(size, interpolation=PIL.Image.BICUBIC),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+
+    test_transform = transforms.Compose([
+        # transforms.Resize(size, interpolation=PIL.Image.BICUBIC),
+        transforms.CenterCrop(size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)
+    ])
+
+    if args.model_type == 'ours_cl':
+        train_dataset = MiniImagenet_dataset(args.path, noise_rate=args.noise_rate2,
+                                             transform=ThreeCropTransform(train_wtransform, train_stransform),
+                                             target_transform=transformer.transform_target,)
+    else:
+        train_dataset = MiniImagenet_dataset(args.path, noise_rate=args.noise_rate2,
+                                              transform=train_wtransform,
+                                              target_transform=transformer.transform_target,)
+
+    test_dataset = MiniImagenet_dataset(args.path, noise_rate='valid',
+        transform=test_transform,
+        target_transform=transformer.transform_target)
+
+    val_dataset = test_dataset # follow PLS
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                               batch_size=args.batch_size,
+                                               drop_last=False,
+                                               shuffle=True)
+
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
+                                             batch_size=args.batch_size,
+                                             drop_last=False,
+                                             shuffle=False)
+
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                              batch_size=args.batch_size,
+                                              drop_last=False,
+                                              shuffle=False)
+
+    return train_loader, val_loader, test_loader
+
+Clothing1M_PATH="/home/ttwu/script/dataset/Clothing_1M"
+
+class Clothing1M(VisionDataset):
+    def __init__(self, root, mode='train', transform=None, target_transform=None, num_per_class=-1):
+
+        super(Clothing1M, self).__init__(root, transform=transform, target_transform=target_transform)
+
+        if mode == 'train':
+            flist = os.path.join(root, "annotations/noisy_train.txt")#100w,265664(18976*14)
+        if mode == 'val':
+            flist = os.path.join(root, "annotations/clean_val.txt")#14313
+        if mode == 'test':
+            flist = os.path.join(root, "annotations/clean_test.txt")#10526
+
+        self.impaths, self.targets = self.flist_reader(flist)
+
+        rng = np.random.RandomState(seed=0)
+        if num_per_class > 0:
+            impaths, targets = [], []
+            num_each_class = np.zeros(14)
+            indexs = np.arange(len(self.impaths))
+            rng.shuffle(indexs)
+
+            for i in indexs:
+                if num_each_class[self.targets[i]] < num_per_class:
+                    impaths.append(self.impaths[i])
+                    targets.append(self.targets[i])
+                    num_each_class[self.targets[i]] += 1
+
+            self.impaths, self.targets = impaths, targets
+            print('#samples/class: {};\n#total samples: {:d}\n'.format([int(i) for i in num_each_class],
+                                                                       int(sum(num_each_class))))
+
+        # TODO
+        self.targets = np.array(self.targets)
+        self.train_labels = self.targets
+    #         # for quickly ebug
+    #         self.impaths, self.targets = self.impaths[:1000], self.targets[:1000]
+
+    def __getitem__(self, index):
+        impath = self.impaths[index]
+        target = self.train_labels[index]
+
+        img = Image.open(impath).convert("RGB")
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+
+    def __len__(self):
+        return len(self.impaths)
+
+    def flist_reader(self, flist):
+        impaths = []
+        targets = []
+        with open(flist, 'r') as rf:
+            for line in rf.readlines():
+                row = line.split(" ")
+                impaths.append(self.root + '/' + row[0][7:])#remove "image/"
+                targets.append(int(row[1]))
+        return impaths, targets
+
+    def update_corrupted_label(self, noise_label):
+        self.train_labels[:] = noise_label[:]
 
 
+class Clothing1MWithIdx(Clothing1M):
+    def __init__(self,
+                 root,
+                 mode='train',
+                 transform=None,
+                 target_transform=None,
+                 num_per_class=-1):
+        super(Clothing1MWithIdx, self).__init__(root=root,
+                                                mode=mode,
+                                                transform=transform,
+                                                target_transform=target_transform,
+                                                num_per_class=num_per_class)
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int):  index of element to be fetched
 
+        Returns:
+            tuple: (sample, target, index) where index is the index of this sample in dataset.
+        """
+        img, target = super().__getitem__(index)
+        return img, target, index
 
+def get_Clothing1M_train_and_val_loader(args):
+    '''
+    batch_size: train(32),val/test(128)
+    '''
+    print('==> Preparing data for Clothing1M..')
+
+    train_transform = transforms.Compose([transforms.Resize((256)),
+                                          transforms.RandomCrop(224),
+                                          transforms.RandomHorizontalFlip(),
+                                          transforms.ToTensor(),
+                                          transforms.Normalize((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214)),
+                                          ])
+    test_transform = transforms.Compose([transforms.Resize((256)),
+                                         transforms.CenterCrop(224),
+                                         transforms.ToTensor(),
+                                         transforms.Normalize((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214)),
+                                         ])
+    train_dataset = Clothing1MWithIdx(root=Clothing1M_PATH,
+                                      mode='train',
+                                      transform=train_transform,
+                                      target_transform=transformer.transform_target,
+                                      num_per_class=args.num_per_class)
+
+    val_dataset = Clothing1MWithIdx(root=Clothing1M_PATH,
+                                    mode='val',
+                                    transform=test_transform,
+                                    target_transform=transformer.transform_target,)
+    test_dataset = Clothing1MWithIdx(root=Clothing1M_PATH,
+                                     mode='test',
+                                     transform=test_transform,
+                                     target_transform=transformer.transform_target,)
+
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+
+    return train_loader, val_loader, test_loader
 
 class cifar10_test_dataset(Data.Dataset):
     def __init__(self, path, transform=None, target_transform=None):
