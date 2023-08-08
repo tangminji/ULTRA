@@ -111,7 +111,7 @@ class CustomClassificationHead(nn.Module):
         self.filter = filter
         self.classification_head = classification_head
     def forward(self, hidden_states):
-        print('hidden_state', hidden_states.shape)
+        # print('hidden_state', hidden_states.shape)
         hidden_states = self.func(hidden_states, filter=self.filter)
         hidden_states = self.classification_head(hidden_states)
         return hidden_states
