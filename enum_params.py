@@ -65,9 +65,9 @@ if __name__ == '__main__':
     tpe_algorithm = tpe.suggest
     bayes_trials = Trials()
 
-    assert args.dataset == "cnwl"
+    # assert args.dataset == "cnwl"
 
-    MAX_EVALS = 5  # TODO 设置轮次
+    MAX_EVALS = 4  # TODO 设置轮次
     # TODO: times, sigma (key hyperparameters)
     # space中所有参数都需要是hp对象，否则best会缺失相应超参数值
     # python ../main_ce1.py \
@@ -88,10 +88,15 @@ if __name__ == '__main__':
 
     fixed = {
     }
-
+    # space = {
+    #     'warm_up': [1, 2, 4]
+    # }
     space = {
-        'warm_up': [10, 15, 20, 25, 30],
+        'warm_up': [2, 4, 5, 6]
     }
+    # space = {
+    #     'warm_up': [25, 30],
+    # }
     # space = {
     #     'warm_up': [25, 30, 35],
     # }

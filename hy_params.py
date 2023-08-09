@@ -54,7 +54,7 @@ if __name__ == '__main__':
     tpe_algorithm = tpe.suggest
     bayes_trials = Trials()
 
-    assert args.dataset == "cnwl"
+    # assert args.dataset == "cnwl"
 
     MAX_EVALS = 15  # TODO 设置轮次
     # TODO: times, sigma (key hyperparameters)

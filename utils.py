@@ -177,6 +177,14 @@ def train_ours(args, model, loader, optimizer, epoch, scheduler, criterion, net_
     log_value('train/lr', optimizer.param_groups[0]['lr'], step=epoch)
     log_value('train_detail/delta_smooth/avg', delta_smooth.mean(), step=epoch)
     log_value('train_detail/delta_smooth/std', delta_smooth.std(), step=epoch)
+    if args.dataset == 'wiki':
+        delta_clean = delta_smooth[args.clean_ind]
+        if len(delta_clean) > 0:
+            log_value('train_detail/delta_clean/avg', delta_clean.mean(), step=epoch)
+            log_value('train_detail/delta_clean/std', delta_clean.std(), step=epoch)
+        delta_noisy = delta_smooth[args.noisy_ind]
+        log_value('train_detail/delta_noisy/avg', delta_noisy.mean(), step=epoch)
+        log_value('train_detail/delta_noisy/std', delta_noisy.std(), step=epoch)
     log_value('train_detail/net_record/avg', net_record.mean(), step=epoch)
     log_value('train_detail/net_record/std', net_record.std(), step=epoch)
     if args.model_type == 'ours_cl':

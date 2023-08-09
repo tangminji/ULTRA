@@ -79,7 +79,7 @@ def init_args():
 
     if args.dataset == 'clothing1m':
         # TODO batch_size=256, however the resources may be used up
-        parser.set_defaults(c=14, batch_size=64, n_epoch=40, lr=0.01, J=11, data_len=2048, num_per_class=18976)
+        parser.set_defaults(c=14, batch_size=32, n_epoch=10, lr=1e-3, momentum=0.9, weight_decay=1e-3, J=11, data_len=2048, num_per_class=18976)
         args = parser.parse_args()
     elif args.dataset == 'wiki':
         # Train Setting
@@ -91,6 +91,11 @@ def init_args():
 
 
 def update_args(params={}):
+    # update args according to params
+    for key in params:
+        if params[key] is not None:
+            setattr(args, key, params[key])
+
     if args.model_type == 'ce':
         if args.filter == 'None':
             args.filter = None
@@ -98,10 +103,9 @@ def update_args(params={}):
     elif args.model_type in ['ours', 'ours_cl']:
         assert args.filter in ['dwt', 'dct'], 'Filter should be set~'
 
-    # update args according to params
-    for key in params:
-        if params[key] is not None:
-            setattr(args, key, params[key])
+    # Make sure the rollWindow is full when run 'ours'
+    if args.rollWindow > args.warm_up:
+        args.rollWindow = args.warm_up
 
     noise_level = f"{args.noise_rate1}_{args.noise_rate2}"
     if args.nrun:
@@ -114,11 +118,12 @@ def update_args(params={}):
                             "{}".format(args.model_type) + (f"-{args.aug_views}" if args.model_type=='ours_cl' else ''),
                             '{}{}{}/'.format(args.noise_type,
                                                 f'_epoch{args.n_epoch}_lr{args.lr}_bs{args.batch_size}_wd{args.weight_decay}',
-                        '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
+                        '' if args.model_type == 'ce' else '_{}_J={}_{}_lam={}_wm={}_window={}_del={}_eps={}_eta={}_inc={}{}'.format(args.filter,
                                                                                 args.J,
                                                                                 args.f_type,
                                                                                 args.lam,
                                                                                 args.warm_up,
+                                                                                args.rollWindow,
                                                                                 args.delta,
                                                                                 args.epsilon,
                                                                                 args.eta,
@@ -187,10 +192,12 @@ def main(args, params={}):
     else:
         optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
     scheduler = LambdaLR(optimizer, lambda epoch: 1.0) # Nothing to do with lr
-    if args.dataset in ['cnwl', 'clothing1m']:
+    if args.dataset in ['cnwl']:
         scheduler = CosineAnnealingLR(optimizer, T_max=args.n_epoch)
     elif args.dataset in ['cifar10s']:
         scheduler = MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
+    elif args.dataset in ['clothing1m']:
+        scheduler = LambdaLR(optimizer, lr_lambda= lambda epoch: 1.0 if epoch<5 else 0.1)
     
 
     # training

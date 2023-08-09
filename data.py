@@ -405,9 +405,9 @@ def get_Clothing1M_train_and_val_loader(args):
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=4 * args.batch_size, shuffle=False)
 
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=4 * args.batch_size, shuffle=False)
 
     return train_loader, val_loader, test_loader
 

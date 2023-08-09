@@ -100,6 +100,13 @@ def get_wiki_train_and_val_loader(args):
     val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=False)
     test_loader = DataLoader(testset, batch_size=args.batch_size, shuffle=False)
 
+    save_path = f'data_meta/wiki/{args.noise_rate}'
+    os.makedirs(save_path, exist_ok=True)
+    if os.path.exists(f"{save_path}/noisy_ind.npy"):
+        old_noisy_ind = np.load(f"{save_path}/noisy_ind.npy")
+        assert np.all(old_noisy_ind == np.array(noisy_ind))
+    np.save(f"{save_path}/noisy_ind.npy", noisy_ind)
+    np.save(f"{save_path}/clean_ind.npy", clean_ind)
     
     return train_loader, val_loader, test_loader, noisy_ind, clean_ind
 
