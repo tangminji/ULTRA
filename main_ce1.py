@@ -96,9 +96,9 @@ def update_args(params={}):
         if params[key] is not None:
             setattr(args, key, params[key])
 
+    if args.filter == 'None':
+        args.filter = None
     if args.model_type == 'ce':
-        if args.filter == 'None':
-            args.filter = None
         assert args.filter == None, 'Filter should not be set~'
     elif args.model_type in ['ours', 'ours_cl']:
         assert args.filter in ['dwt', 'dct'], 'Filter should be set~'
@@ -136,12 +136,16 @@ def update_args(params={}):
     args.exp_name = exp_name
     args.logpath = '{}/log.txt'.format(exp_name)
     args.log_dir = os.path.join(os.getcwd(), exp_name)
-    generate_log_dir(args)
-    log(args.logpath, 'Settings: {}\n'.format(args))
 
     args.device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
     if torch.cuda.is_available() and args.gpu is not None:
         torch.cuda.set_device(args.gpu)
+    else:
+        assert False, f'cuda: {torch.cuda.is_available()}, device: {args.device}'
+
+    generate_log_dir(args)
+    log(args.logpath, 'Settings: {}\n'.format(args))
+
     set_seed(args)
     return args
 

@@ -338,7 +338,6 @@ class CustomResNet(nn.Module):
     def forward(self, x, filter=None):
         x = self.features(x)
         x = x.view(x.size(0), -1)
-        print(x.shape)
         x = self.func(x, filter) # 执行变换操作
         logits = self.classifier(x)
         # Feature for CL
