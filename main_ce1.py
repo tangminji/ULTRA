@@ -41,7 +41,6 @@ def init_args():
     parser.add_argument('--momentum', type=int, help='momentum', default=0.9)
     parser.add_argument('--batch_size', type=int, help='batch_size', default=128)
 
-    #TODO: newly added by wtt, hyperparameters:[warm_up, delta, epsilon, eta], the last one/two more important?
     parser.add_argument('--path', type=str, help='path prefix', default='./')
     parser.add_argument('--restart', default=True, const=True, action='store_const',
                         help='Erase log and saved checkpoints and restart training')#False
@@ -83,7 +82,7 @@ def init_args():
         args = parser.parse_args()
     elif args.dataset == 'wiki':
         # Train Setting
-        parser.set_defaults(noise_mode='mix', data_path='/home/mjtang/wtt/NoisywikiHow/data/wikihow', c=158, batch_size=32, n_epoch=10, lr=3e-5, data_len=768, J=9)
+        parser.set_defaults(noise_mode='mix', data_path='data/wikihow', c=158, batch_size=32, n_epoch=10, lr=3e-5, data_len=768, J=9)
         args = parser.parse_args()
         args.noise_rate = args.noise_rate2
 
@@ -217,8 +216,6 @@ def main(args, params={}):
     net_record = torch.zeros([rollwin, len(train_loader.dataset), args.c+1])
     delta_smooth = torch.full((len(train_loader.dataset),), args.delta)
 
-    # TODO
-    # 记录net_record
     if args.record:
         records = torch.zeros([args.n_epoch, len(train_loader.dataset), args.c+1])
 
@@ -299,16 +296,13 @@ if __name__ == '__main__':
     args = init_args()
 
     print("load params from : ", args.params_path)
-    # TODO params_path等变量
     params = json.load(open(args.params_path, 'r', encoding="utf-8")) if args.params_path !='' else {}
     if 'best' in params:
         params = params['best']
         args.nrun = True
     args = update_args(params)
-    # TODO
     args.record = True
     res = main(args, params=params)
-    # TODO
     if args.out_tmp:
         if 'ITERATION' in params:
             res['ITERATION'] = params['ITERATION']

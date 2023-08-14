@@ -10,7 +10,7 @@ import argparse
 
 # Image.open is very slow, resize and convert them into numpy first
 
-def preprocess_miniimagenet(noise_rate, base_path = '/home/mjtang/dataset/cnwl/mini-imagenet'):
+def preprocess_miniimagenet(noise_rate, base_path = 'dataset/cnwl/mini-imagenet'):
     size = 32
     target_savepoint = f"data/cnwl/red_{noise_rate}_images.npy"
     target_label_savepoint = f"data/cnwl/red_{noise_rate}_labels.npy"
@@ -53,7 +53,7 @@ def preprocess_miniimagenet(noise_rate, base_path = '/home/mjtang/dataset/cnwl/m
     #     transforms.Normalize(mean, std)
     # ])
     # pdb.set_trace()
-def preprocess_valid_miniimagenet(base_path = '/home/mjtang/dataset/cnwl/mini-imagenet'):
+def preprocess_valid_miniimagenet(base_path = 'dataset/cnwl/mini-imagenet'):
     size = 32
     target_savepoint = f"data/cnwl/red_valid_images.npy"
     target_label_savepoint = f"data/cnwl/red_valid_labels.npy"
@@ -80,7 +80,7 @@ def preprocess_valid_miniimagenet(base_path = '/home/mjtang/dataset/cnwl/mini-im
     np.save(target_savepoint, images_np)
 
 
-def load_miniimagenet(noise_rate, base_path = '/home/mjtang/dataset/cnwl/mini-imagenet'):
+def load_miniimagenet(noise_rate, base_path = 'dataset/cnwl/mini-imagenet'):
     size = 32
 
     target_savepoint = f"data/cnwl/red_{noise_rate}_images.npy"
@@ -154,7 +154,7 @@ def test_lr():
     print(lr1[:10])
     print(lr2[:10])
 
-def check_miniimagenet(noise_rate, base_path = '/home/mjtang/dataset/cnwl/mini-imagenet'):
+def check_miniimagenet(noise_rate, base_path = 'dataset/cnwl/mini-imagenet'):
     size = 32
     target_label_savepoint = f"data/cnwl/red_{noise_rate}_labels.npy"
     real_label_savepoint = f"data/cnwl/red_{noise_rate}_real.npy"
@@ -188,14 +188,14 @@ def check_miniimagenet(noise_rate, base_path = '/home/mjtang/dataset/cnwl/mini-i
     img2 = np.load(target_old_savepoint)
     print('same as old', (img1.shape==img2.shape) & np.all(img1 == img2))
 
-def get_class_name(base_path = '/home/mjtang/dataset/cnwl/mini-imagenet'):
+def get_class_name(base_path = 'dataset/cnwl/mini-imagenet'):
     with open(os.path.join(base_path, "class_name.txt"), "r") as f:
         class_name = f.read().strip().splitlines()
     print(len(class_name))
     print(class_name)
     return class_name
 
-Clothing1M_PATH="/home/ttwu/script/dataset/Clothing_1M"
+Clothing1M_PATH="dataset/Clothing_1M"
 
 def preprocess_clothing1m(mode='train', num_per_class=-1, root=Clothing1M_PATH):
     print(f'process clothing1m {mode} set')

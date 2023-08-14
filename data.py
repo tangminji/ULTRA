@@ -278,7 +278,7 @@ def get_miniimagenet_dataset(args):
 
     return train_loader, val_loader, test_loader
 
-Clothing1M_PATH="/home/ttwu/script/dataset/Clothing_1M"
+Clothing1M_PATH="dataset/Clothing_1M"
 
 class Clothing1M(VisionDataset):
     def __init__(self, root, mode='train', transform=None, target_transform=None, num_per_class=-1):

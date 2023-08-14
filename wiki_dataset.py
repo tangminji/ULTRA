@@ -161,17 +161,4 @@ def get_wiki_model(args, num_class = 158):
 
 
 if __name__ == '__main__':
-    # TODO get noisywikiHow data
-    # from cmd_args import parser
-    import pdb
-    from main_ce1_wikihow import init_args
-    args = init_args()
-    # args = parser.parse_args(['--dataset','wiki','--noise_mode','mix','--noise_rate','0.4',
-    #                           '--seed','1','--model_type','bart','--data_path','/home/mjtang/wtt/NoisywikiHow/data/wikihow'])
-    train_loader, val_loader, test_loader, noisy_ind, clean_ind = get_wiki_train_and_val_loader(args)
-    model = get_wiki_model(args, num_class=158)
-    pdb.set_trace()
-    for x,y,index in train_loader:
-        print(x['input_ids'].shape, y.shape, index.shape)
-        output = model(**x)
-        break
+    pass
