@@ -280,48 +280,98 @@ def get_miniimagenet_dataset(args):
 
 Clothing1M_PATH="dataset/Clothing_1M"
 
+# class Clothing1M(VisionDataset):
+#     def __init__(self, root, mode='train', transform=None, target_transform=None, num_per_class=-1):
+
+#         super(Clothing1M, self).__init__(root, transform=transform, target_transform=target_transform)
+
+#         if mode == 'train':
+#             flist = os.path.join(root, "annotations/noisy_train.txt")#100w,265664(18976*14)
+#         if mode == 'val':
+#             flist = os.path.join(root, "annotations/clean_val.txt")#14313
+#         if mode == 'test':
+#             flist = os.path.join(root, "annotations/clean_test.txt")#10526
+
+#         self.impaths, self.targets = self.flist_reader(flist)
+
+#         rng = np.random.RandomState(seed=0)
+#         if num_per_class > 0:
+#             impaths, targets = [], []
+#             num_each_class = np.zeros(14)
+#             indexs = np.arange(len(self.impaths))
+#             rng.shuffle(indexs)
+
+#             for i in indexs:
+#                 if num_each_class[self.targets[i]] < num_per_class:
+#                     impaths.append(self.impaths[i])
+#                     targets.append(self.targets[i])
+#                     num_each_class[self.targets[i]] += 1
+
+#             self.impaths, self.targets = impaths, targets
+#             print('#samples/class: {};\n#total samples: {:d}\n'.format([int(i) for i in num_each_class],
+#                                                                        int(sum(num_each_class))))
+
+#         self.targets = np.array(self.targets)
+#         self.train_labels = self.targets
+#     #         # for quickly ebug
+#     #         self.impaths, self.targets = self.impaths[:1000], self.targets[:1000]
+
+#     def __getitem__(self, index):
+#         impath = self.impaths[index]
+#         target = self.train_labels[index]
+
+#         img = Image.open(impath).convert("RGB")
+
+#         if self.transform is not None:
+#             img = self.transform(img)
+
+#         if self.target_transform is not None:
+#             target = self.target_transform(target)
+
+#         return img, target
+
+#     def __len__(self):
+#         return len(self.impaths)
+
+#     def flist_reader(self, flist):
+#         impaths = []
+#         targets = []
+#         with open(flist, 'r') as rf:
+#             for line in rf.readlines():
+#                 row = line.split(" ")
+#                 impaths.append(self.root + '/' + row[0][7:])#remove "image/"
+#                 targets.append(int(row[1]))
+#         return impaths, targets
+
+#     def update_corrupted_label(self, noise_label):
+#         self.train_labels[:] = noise_label[:]
+
+# New
 class Clothing1M(VisionDataset):
     def __init__(self, root, mode='train', transform=None, target_transform=None, num_per_class=-1):
 
         super(Clothing1M, self).__init__(root, transform=transform, target_transform=target_transform)
-
-        if mode == 'train':
-            flist = os.path.join(root, "annotations/noisy_train.txt")#100w,265664(18976*14)
-        if mode == 'val':
-            flist = os.path.join(root, "annotations/clean_val.txt")#14313
-        if mode == 'test':
-            flist = os.path.join(root, "annotations/clean_test.txt")#10526
-
-        self.impaths, self.targets = self.flist_reader(flist)
-
-        rng = np.random.RandomState(seed=0)
-        if num_per_class > 0:
-            impaths, targets = [], []
-            num_each_class = np.zeros(14)
-            indexs = np.arange(len(self.impaths))
-            rng.shuffle(indexs)
-
-            for i in indexs:
-                if num_each_class[self.targets[i]] < num_per_class:
-                    impaths.append(self.impaths[i])
-                    targets.append(self.targets[i])
-                    num_each_class[self.targets[i]] += 1
-
-            self.impaths, self.targets = impaths, targets
-            print('#samples/class: {};\n#total samples: {:d}\n'.format([int(i) for i in num_each_class],
-                                                                       int(sum(num_each_class))))
-
-        # TODO
-        self.targets = np.array(self.targets)
-        self.train_labels = self.targets
-    #         # for quickly ebug
-    #         self.impaths, self.targets = self.impaths[:1000], self.targets[:1000]
+        target_savepoint = f"data/clothing1m/{mode}_{num_per_class}_images.npy" if mode != 'train' else f"data/clothing1m/{mode}_{num_per_class}/"
+        target_label_savepoint = f"data/clothing1m/{mode}_{num_per_class}_labels.npy"
+        self.train_labels = np.load(target_label_savepoint)
+        self.mode = mode
+        if mode != 'train':
+            self.train_data = np.load(target_savepoint, allow_pickle=True)
+            self.train_data = [Image.fromarray(x) for x in self.train_data]
+        else:
+            self.train_data = []
+            self.image_folder = target_savepoint
+        # if mode == 'train':
+        #     limit = 10000
+        #     self.train_labels = self.train_labels[:limit]
+        #     self.train_data = self.train_data[:limit]
 
     def __getitem__(self, index):
-        impath = self.impaths[index]
         target = self.train_labels[index]
-
-        img = Image.open(impath).convert("RGB")
+        if self.mode != 'train':
+            img = self.train_data[index]
+        else:
+            img = Image.fromarray(np.load(f"{self.image_folder}/{index}.npy"))
 
         if self.transform is not None:
             img = self.transform(img)
@@ -332,7 +382,7 @@ class Clothing1M(VisionDataset):
         return img, target
 
     def __len__(self):
-        return len(self.impaths)
+        return len(self.train_labels)
 
     def flist_reader(self, flist):
         impaths = []
@@ -346,7 +396,6 @@ class Clothing1M(VisionDataset):
 
     def update_corrupted_label(self, noise_label):
         self.train_labels[:] = noise_label[:]
-
 
 class Clothing1MWithIdx(Clothing1M):
     def __init__(self,
@@ -376,21 +425,29 @@ def get_Clothing1M_train_and_val_loader(args):
     batch_size: train(32),val/test(128)
     '''
     print('==> Preparing data for Clothing1M..')
-
-    train_transform = transforms.Compose([transforms.Resize((256)),
+    train_transform = transforms.Compose([#transforms.Resize((256)),
                                           transforms.RandomCrop(224),
                                           transforms.RandomHorizontalFlip(),
                                           transforms.ToTensor(),
                                           transforms.Normalize((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214)),
                                           ])
-    test_transform = transforms.Compose([transforms.Resize((256)),
+    train_stransform = transforms.Compose([
+        # transforms.Resize(256, interpolation=PIL.Image.BICUBIC),
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214)),
+    ])
+    test_transform = transforms.Compose([#transforms.Resize((256)),
                                          transforms.CenterCrop(224),
                                          transforms.ToTensor(),
                                          transforms.Normalize((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214)),
                                          ])
     train_dataset = Clothing1MWithIdx(root=Clothing1M_PATH,
                                       mode='train',
-                                      transform=train_transform,
+                                      transform=train_transform if args.model_type != 'ours_cl' else ThreeCropTransform(train_transform, train_stransform),
                                       target_transform=transformer.transform_target,
                                       num_per_class=args.num_per_class)
 
