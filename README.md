@@ -1,2 +1,2 @@
-# ULTRA
-This repository accompanies the research paper, Uncertainty-guided Label Correction with Wavelet-transformed Discriminative Representation Enhancement (accepted at Neural Networks).
+# Uncertainty-guided Label Correction with Wavelet-transformed Discriminative Representation Enhancement
+This repository accompanies the research paper, [Uncertainty-guided Label Correction with Wavelet-transformed Discriminative Representation Enhancement](https://www.sciencedirect.com/science/article/abs/pii/S0893608024003071) (accepted at Neural Networks).
