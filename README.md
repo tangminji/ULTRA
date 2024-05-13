@@ -20,7 +20,28 @@ Our experiment was conducted on the following datasets:
 + NoisywikiHow
 + Clothing1M
 
-The experimental data is too large, and we will guide how to download and use `data_process.py` to process the data in the future.
+Opening images is time-consuming, so we need to first convert them to numpy format. You should get dataset as follows:
+```
+# Download data.zip from release, which contains data for `CIFAR-10` and `Red Mini-ImageNet`
+cd ULTRA
+mv /path/to/data.zip .
+unzip data.zip
+
+# get NoisywikiHow-dataset
+git clone git@github.com:tangminji/NoisywikiHow-dataset.git
+mv NoisywikiHow-dataset data/wikihow
+
+# Follow the `step 1` from [this repo](https://github.com/Cysu/noisy_label) to get the Clothing1M data.
+# get Clothing1M data
+mkdir -p dataset
+mv /path/to/clothing1M dataset/Clothing_1M
+# move the image folder directly into Clothing_1M folder
+mv dataset/Clothing_1M/images/* dataset/Clothing_1M/
+
+# preprocess Clothing_1M dataset
+conda activate ULTRA
+python data_preprocess.py
+```
 
 ## Running
 

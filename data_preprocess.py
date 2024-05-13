@@ -349,18 +349,16 @@ if __name__ == '__main__':
     preprocess_clothing1m('val')
     preprocess_clothing1m('test')
 
-    preprocess_valid_miniimagenet()
-    preprocess_miniimagenet(0.2)
-    preprocess_miniimagenet(0.4)
+    # preprocess_valid_miniimagenet()
+    # preprocess_miniimagenet(0.2)
+    # preprocess_miniimagenet(0.4)
+    # preprocess_miniimagenet(0.6)
+    # preprocess_miniimagenet(0.8)
 
-    check_miniimagenet(0.2)
-    check_miniimagenet(0.4)
-    check_miniimagenet(0.6)
-    check_miniimagenet(0.8)
-    check_miniimagenet('valid')
-    # if args.valid:
-    #     preprocess_valid_miniimagenet()
-    # else:
-    #     preprocess_miniimagenet(args.noise_rate)
-    # load_miniimagenet(args.noise_rate)
+    # check_miniimagenet(0.2)
+    # check_miniimagenet(0.4)
+    # check_miniimagenet(0.6)
+    # check_miniimagenet(0.8)
+    # check_miniimagenet('valid')
+    # load_miniimagenet(0.4)
     # pass    
