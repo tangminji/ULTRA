@@ -1,6 +1,6 @@
 # Uncertainty-guided Label Correction with Wavelet-transformed Discriminative Representation Enhancement
 This repository accompanies the research paper, [Uncertainty-guided Label Correction with Wavelet-transformed Discriminative Representation Enhancement](https://www.sciencedirect.com/science/article/abs/pii/S0893608024003071) (accepted at Neural Networks 2024).
-Our work and code are adapted from "[Extended T: Learning with Mixed Closed-set and Open-set Noisy Labels](https://ieeexplore.ieee.org/abstract/document/9790332)" (Zhang et al., IEEE Transactions on Pattern Analysis and Machine Intelligence 2022)
+Our code is adapted from "[Extended T: Learning with Mixed Closed-set and Open-set Noisy Labels](https://ieeexplore.ieee.org/abstract/document/9790332)" (Zhang et al., IEEE Transactions on Pattern Analysis and Machine Intelligence 2022)
 
 ## ULTRA
 Identifying noise is challenging because noisy samples closely resemble true positives. Existing approaches often assume a single noise source, oversimplify closed-set noise, or treat open-set noise as toxic and eliminate it, resulting in limited practical effects. To address these issues, we present a novel approach named uncertaintyguided label correction with wavelet-transformed discriminative representation enhancement (Ultra),
