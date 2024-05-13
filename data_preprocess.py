@@ -339,17 +339,20 @@ def test_clothing1m():
     img.save('test5.jpg')
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--noise_rate', type=float, default=0.6) # 0.0 for val set
-    parser.add_argument('--valid', action='store_true')
-    args, others = parser.parse_known_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--noise_rate', type=float, default=0.6) # 0.0 for val set
+    # parser.add_argument('--valid', action='store_true')
+    # args, others = parser.parse_known_args()
     
 
-    # preprocess_clothing1m('train', num_per_class=18976)
-    # preprocess_clothing1m('val')
-    # preprocess_clothing1m('test')
+    preprocess_clothing1m('train', num_per_class=18976)
+    preprocess_clothing1m('val')
+    preprocess_clothing1m('test')
 
-    # get_class_name()
+    preprocess_valid_miniimagenet()
+    preprocess_miniimagenet(0.2)
+    preprocess_miniimagenet(0.4)
+
     check_miniimagenet(0.2)
     check_miniimagenet(0.4)
     check_miniimagenet(0.6)
