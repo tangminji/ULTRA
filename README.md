@@ -8,10 +8,11 @@ designed to mitigate the effects of mixed noise. To achieve robust mixed-noise i
 
 ## Environments
 You can setup python environment with:
-
+```
 conda create -n ULTRA python=3.6.15
 conda activate ULTRA
 pip install -r requirements.txt
+```
 
 ## Data
 Our experiment was conducted on the following datasets:
