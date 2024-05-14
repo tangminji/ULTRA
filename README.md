@@ -18,7 +18,7 @@ pip install -r requirements.txt
 Our experiment was conducted on the following datasets:
 + CIFAR-10
 + Red Mini-ImageNet
-+ NoisywikiHow
++ NoisywikiHow  [paper](https://aclanthology.org/2023.findings-acl.299/) [code](https://github.com/tangminji/NoisywikiHow) [data](https://github.com/tangminji/NoisywikiHow)
 + Clothing1M
 
 Opening images is time-consuming, so we need to first convert them to numpy format. You should get dataset as follows:
